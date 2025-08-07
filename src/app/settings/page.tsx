@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Link from 'next/link';
+import React, { Suspense } from 'react';
 
 const TABS = ['orders', 'returns', 'saved', 'address', 'settings'];
 
@@ -58,7 +59,7 @@ const dummyStates = [
   { code: 'TX', name: 'Texas' },
 ];
 
-export default function SettingsPage() {
+function SettingsPage() {
   const [activeTab, setActiveTab] = useState<string>('orders');
   const searchParams = useSearchParams();
 
@@ -465,5 +466,12 @@ export default function SettingsPage() {
       </div>
       <Footer />
     </div>
+  );
+}
+export default function SettingsPageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SettingsPage />
+    </Suspense>
   );
 }
