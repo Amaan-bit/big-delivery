@@ -1,6 +1,19 @@
-import Link from "next/link"
+"use client";
+
+import { useEffect, useState } from "react";
+import { fetchCategories, Category } from "@/app/lib/api";
+import Link from "next/link";
 
 const Footer = () => {
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    const getCategories = async () => {
+      const data = await fetchCategories();
+      setCategories(data);
+    };
+    getCategories();
+  }, []);
   return (
     <footer className="bg-blue-50 py-8 text-sm text-gray-700 mt-8">
       <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -32,36 +45,13 @@ const Footer = () => {
         <div>
           <h4 className="font-bold mb-2">All Categories</h4>
           <ul className="space-y-2">
-            <li>
-              <Link href="/category/lentils-beans" className="text-gray-700 hover:text-orange-400 transition">
-                Lentils &amp; Beans
-              </Link>
-            </li>
-            <li>
-              <Link href="/category/atta-sooji-flours" className="text-gray-700 hover:text-orange-400 transition">
-                Atta, Sooji &amp; Flours
-              </Link>
-            </li>
-            <li>
-              <Link href="/category/spices-seasoning" className="text-gray-700 hover:text-orange-400 transition">
-                Spices &amp; Seasoning
-              </Link>
-            </li>
-            <li>
-              <Link href="/category/dry-fruits-nuts" className="text-gray-700 hover:text-orange-400 transition">
-                Dry Fruits &amp; Nuts
-              </Link>
-            </li>
-            <li>
-              <Link href="/category/mukhwas" className="text-gray-700 hover:text-orange-400 transition">
-                Mukhwas
-              </Link>
-            </li>
-            <li>
-              <Link href="/category/whole-spices" className="text-gray-700 hover:text-orange-400 transition">
-                Whole Spices
-              </Link>
-            </li>
+            {categories.map((cat) => (
+              <li key={cat.id}>
+                  <Link href={`/category/${cat.slug}`} className="text-gray-700 hover:text-orange-400 transition">
+                    {cat.name}
+                  </Link>
+                </li>
+            ))}
           </ul>
         </div>
         <div className="text-center md:col-span-3 mt-4">

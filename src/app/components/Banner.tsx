@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchBanners, Banner as BannerType } from "../lib/api";
+import { fetchBanners, Banner as BannerType } from "@/app/lib/api";
 import Slider from "react-slick";
 import Image from "next/image";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
 
 const Banner = () => {
   const [banners, setBanners] = useState<BannerType[]>([]);
@@ -20,7 +21,7 @@ const Banner = () => {
     load();
   }, []);
 
-  if (loading) return <div className="text-center py-6">Loading banners...</div>;
+  if (loading) return <LoadingSpinner />;
 
   // React Slick settings, tweak as you like
   const settings = {

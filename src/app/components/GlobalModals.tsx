@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import AuthModal from "./AuthModal";
+import { useRouter } from "next/navigation";
+import AuthModal from "@/app/components/AuthModal";
 
 export default function GlobalModals() {
   const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
-    // Replace with your actual auth logic (localStorage, cookies, etc.)
-    // const token = localStorage.getItem("token");
-    setIsAuthenticated(false);
-  }, []);
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setIsAuthenticated(false); 
+      router.push("/"); 
+    } else {
+      setIsAuthenticated(true); 
+    }
+  }, [router]);
 
-  return <AuthModal isAuthenticated={isAuthenticated} />;
+  return !isAuthenticated ? <AuthModal isAuthenticated={isAuthenticated} /> : null;
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { loginUser } from "@/app/lib/api";
+import { useRouter } from "next/navigation";
 
 type LoginModalProps = {
   isAuthenticated: boolean;
@@ -9,6 +11,11 @@ type LoginModalProps = {
 export default function AuthModal({ isAuthenticated }: LoginModalProps) {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -16,43 +23,52 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
     }
   }, [isAuthenticated]);
 
-  const handleClose = () => {
-    setShowModal(false);
-  };
-
   if (!showModal) return null;
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const res = await loginUser({ username, password });
+
+    if (res?.status === "200") {
+      setShowModal(false);
+      router.refresh();
+    } else {
+      console.log(res);
+      setError(res?.message || "Login failed");
+    }
+
+    setLoading(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative">
-        <button
-          onClick={handleClose}
-          className="absolute top-2 right-3 text-red-600 text-xl font-bold"
-        >
-          &times;
-        </button>
-
         {modalType === "login" ? (
           // Login Form
-          <form method="POST" action="/api/login" className="space-y-4" id="loginForm">
-            <input type="hidden" name="user" value="user" />
-            <input type="hidden" name="checkout" value="" />
-
+          <form onSubmit={handleLogin} className="space-y-4" id="loginForm">
             <h2 className="text-xl font-semibold text-center py-2">Login</h2>
-
+            {error && (
+              <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+                <strong className="font-bold"></strong>
+                <span className="block sm:inline">{error}</span>
+              </div>
+            )}
             <div className="flex flex-col">
               <label htmlFor="login_email" className="mb-1 text-sm font-medium">
                 Email
               </label>
               <input
                 type="email"
-                name="email"
                 id="login_email"
                 placeholder="Enter your email"
                 className="border border-gray-300 px-3 py-2 rounded"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 required
               />
-              <small id="loginEmailError" className="text-red-500 text-xs mt-1"></small>
             </div>
 
             <div className="flex flex-col">
@@ -61,21 +77,22 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
               </label>
               <input
                 type="password"
-                name="password"
-                placeholder="Enter your password"
                 id="login_password"
+                placeholder="Enter your password"
                 className="border border-gray-300 px-3 py-2 rounded"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
               />
-              <small id="loginPasswordError" className="text-red-500 text-xs mt-1"></small>
             </div>
 
             <div className="flex items-center justify-between">
               <button
                 type="submit"
-                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+                disabled={loading}
+                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
               >
-                Login
+                {loading ? "Logging in..." : "Login"}
               </button>
 
               <p className="text-sm text-center">

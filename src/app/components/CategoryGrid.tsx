@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchCategories, Category } from "../lib/api";
+import { fetchCategories, Category } from "@/app/lib/api";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -22,7 +22,7 @@ const CategoryGrid = () => {
         {categories.map((cat) => (
           <Link
             key={cat.id}
-            href={`/category/${cat.id}`}
+            href={`/category/${cat.slug}`}
             className="flex flex-col items-center rounded-md shadow-md py-8 text-sm text-center cursor-pointer hover:shadow-lg transition"
           >
             <div className="w-20 h-20 md:w-30 md:h-30 overflow-hidden mb-2">

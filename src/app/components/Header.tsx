@@ -1,13 +1,14 @@
 'use client';
 import Image from 'next/image';
 import { useState, useRef, useEffect } from 'react';
-import CartModal from './CartModal';
+import CartModal from '@/app/components/CartModal';
 import Link from 'next/link';
+import { useRouter } from "next/navigation";
 
 const Header = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
+  const router = useRouter();
   const profileRef = useRef<HTMLDivElement>(null);
 
   const cartItems = [
@@ -44,6 +45,11 @@ const Header = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/");
+  };
 
   return (
     <>
@@ -87,32 +93,29 @@ const Header = () => {
                 <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded shadow-lg z-50">
                   <ul className="py-2 text-sm text-gray-700">
                     <li>
-                      <Link href="/settings?tab=orders" className="block px-4 py-2 hover:bg-gray-100">
+                      <Link href="/settings?tab=orders" className="block px-4 py-2 cursor-pointer hover:bg-gray-100">
                         My Orders
                       </Link>
                     </li>
                     <li>
-                      <Link href="/settings?tab=saved" className="block px-4 py-2 hover:bg-gray-100">
+                      <Link href="/settings?tab=saved" className="block px-4 py-2 cursor-pointer hover:bg-gray-100">
                         Saved Items
                       </Link>
                     </li>
                     <li>
-                      <Link href="/settings?tab=address" className="block px-4 py-2 hover:bg-gray-100">
+                      <Link href="/settings?tab=address" className="block px-4 py-2 cursor-pointer hover:bg-gray-100">
                         My Address
                       </Link>
                     </li>
                     <li>
-                      <Link href="/settings?tab=settings" className="block px-4 py-2 hover:bg-gray-100">
+                      <Link href="/settings?tab=settings" className="block px-4 py-2 cursor-pointer hover:bg-gray-100">
                         Settings
                       </Link>
                     </li>
                     <li>
                       <button
-                        className="w-full text-left block px-4 py-2 hover:bg-gray-100"
-                        onClick={() => {
-                          // logout logic here
-                          console.log("Logged out");
-                        }}
+                        className="w-full text-left block px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                        onClick={handleLogout}
                       >
                         Logout
                       </button>

@@ -3,8 +3,8 @@
 import { useState,useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
-import Header from '../components/Header';
-import Footer from '../components/Footer';
+import Header from '@/app/components/Header';
+import Footer from '@/app/components/Footer';
 import Link from 'next/link';
 import React, { Suspense } from 'react';
 
