@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { loginUser } from "@/app/lib/api";
+import { loginUser, getCustomerDetail } from "@/app/lib/api";
 import { useRouter } from "next/navigation";
 
 type LoginModalProps = {
@@ -33,6 +33,11 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
     const res = await loginUser({ username, password });
 
     if (res?.status === "200") {
+      try {
+        await getCustomerDetail();
+      } catch (detailErr) {
+        console.error("Error fetching customer detail:", detailErr);
+      }
       setShowModal(false);
       router.refresh();
     } else {
@@ -44,7 +49,7 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
       <div className="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative">
         {modalType === "login" ? (
           // Login Form

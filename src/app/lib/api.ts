@@ -58,7 +58,6 @@ type LoginResponse = {
 };
 
 export async function loginUser(payload: LoginPayload): Promise<LoginResponse | null> {
-  try {
     const res = await fetch(`${BASE_URL}/auth/login`, {
       method: "POST",
       headers: {
@@ -76,10 +75,6 @@ export async function loginUser(payload: LoginPayload): Promise<LoginResponse | 
     }
 
     return data;
-  } catch (error) {
-    console.error("Login failed:", error);
-    return null;
-  }
 }
 
 // Home page
@@ -164,5 +159,145 @@ export async function fetchProductById(id: string | number) {
   return data.data;
 }
 
+// Add to wishlist
+export async function addToWishlist(productId: number, variantId: number) {
+  const token = localStorage.getItem("token"); 
+  const res = await fetch(`${BASE_URL}/wishlist/add`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`, 
+    },
+    body: JSON.stringify({
+      product_id: productId,
+      variant_id: variantId,
+    }),
+  });
 
+  if (!res.ok) {
+    throw new Error("Failed to add to wishlist");
+  }
 
+  return await res.json();
+}
+
+// Get wishlist
+export async function fetchWishlist(token: string) {
+  const res = await fetch(`${BASE_URL}/wishlist`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    throw new Error('Failed to fetch wishlist');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+// Remove wishlist
+export async function removeFromWishlist(token: string, itemId: number) {
+  const res = await fetch(`${BASE_URL}/wishlist/remove/${itemId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || 'Failed to remove item from wishlist');
+  }
+
+  return res.json();
+}
+
+// Move to cart
+export async function moveToCart(token: string, itemId: number) {
+  const res = await fetch(`${BASE_URL}/wishlist/move-to-cart/${itemId}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json();
+    throw new Error(errorData.message || 'Failed to move item to cart');
+  }
+
+  return res.json();
+}
+
+// Customer Detail
+export async function getCustomerDetail() {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    throw new Error("No token found");
+  }
+
+  const res = await fetch(`${BASE_URL}/customer-details`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data = await res.json(); // parse JSON body once
+
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch customer detail");
+  }
+
+  // If API returns user details, save it
+  if (data?.data) {
+    localStorage.setItem("userDetails", JSON.stringify(data.data));
+  }
+
+  return data;
+}
+
+// fetch orders
+export async function fetchOrders(token: string) {
+  const res = await fetch(`${BASE_URL}/orders`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch orders");
+  }
+
+  const data = await res.json();
+  return data.data; // return the array directly
+}
+
+// Change-password
+export async function changePassword(old_password: string, password: string, password_confirmation: string) {
+  const token = localStorage.getItem("token");
+  if (!token) throw new Error("Unauthorized");
+
+  const response = await fetch(`${BASE_URL}/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      old_password,
+      password,
+      password_confirmation,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to change password");
+  }
+
+  return response.json();
+}

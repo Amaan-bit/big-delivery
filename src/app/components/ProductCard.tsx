@@ -1,9 +1,10 @@
 "use client";
 
-import { SlidersHorizontal, Plus } from "lucide-react";
+import { Heart, Check } from "lucide-react";
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { addToWishlist } from "@/app/lib/api";
 
 interface Variant {
   id: number;
@@ -23,8 +24,9 @@ interface ProductCardProps {
 
 const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
   const initialVariant = variants.find((v) => v.is_active) || variants[0] || null;
-
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(initialVariant);
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleVariantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const variantId = Number(e.target.value);
@@ -32,14 +34,35 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
     setSelectedVariant(variant);
   };
 
+  const handleWishlistClick = async () => {
+    if (!selectedVariant) return;
+    try {
+      setLoading(true);
+      await addToWishlist(id, selectedVariant.id);
+      setIsInWishlist(true); // change icon
+    } catch (error) {
+      console.error(error);
+      alert("Failed to add to wishlist");
+    } finally {
+      setLoading(false);
+    }
+  };
   const outOfStock = !selectedVariant;
 
   return (
     <div className="w-55 rounded bg-white shadow-sm relative p-2">
       {/* Top-left icon */}
-      <div className="absolute top-1 left-1 flex items-center gap-0.5 text-gray-600 text-xs z-10">
-        <SlidersHorizontal className="w-3 h-3" />
-        <Plus className="w-2.5 h-2.5" />
+      <div
+        className="absolute top-1 left-1 flex items-center gap-0.5 text-gray-600 text-xs z-10"
+        onClick={handleWishlistClick}
+      >
+        {isInWishlist ? (
+          <Check className="w-5 h-5 text-green-500 cursor-pointer" />
+        ) : (
+          <Heart
+            className={`w-5 h-5 cursor-pointer ${loading ? "opacity-50" : ""}`}
+          />
+        )}
       </div>
 
       {/* Top-right discount */}

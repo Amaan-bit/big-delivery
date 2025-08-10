@@ -3,12 +3,10 @@ import Image from 'next/image';
 import { useState, useRef, useEffect } from 'react';
 import CartModal from '@/app/components/CartModal';
 import Link from 'next/link';
-import { useRouter } from "next/navigation";
 
 const Header = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const router = useRouter();
   const profileRef = useRef<HTMLDivElement>(null);
 
   const cartItems = [
@@ -48,7 +46,7 @@ const Header = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
-    router.push("/");
+    window.location.href = "/";
   };
 
   return (
