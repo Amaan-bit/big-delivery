@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { loginUser, getCustomerDetail } from "@/app/lib/api";
+import { loginUser, getCustomerDetail, registerUser } from "@/app/lib/api";
 import { useRouter } from "next/navigation";
 
 type LoginModalProps = {
@@ -14,8 +14,16 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [registerLoading, setRegisterLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+
+  const [name, setName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string[] }>({});
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -47,6 +55,46 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
 
     setLoading(false);
   };
+
+  const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+  setRegisterLoading(true);
+
+  if (registerPassword !== confirmPassword) {
+    setError("Passwords do not match");
+    setRegisterLoading(false);
+    return;
+  }
+
+  const res = await registerUser({
+    name: name,
+    email: registerEmail,
+    phone: phone,
+    password: registerPassword,
+    password_confirmation: confirmPassword,
+  });
+
+  if (res?.status === "400" && res.errors) {
+    setFieldErrors(res.errors);  // Save the errors keyed by field name
+    setError("");                // Clear general error message
+  } else if (res?.status === "201") {
+    localStorage.setItem("token", res.token);
+    try {
+      await getCustomerDetail();
+    } catch (detailErr) {
+      console.error("Error fetching customer detail:", detailErr);
+    }
+     setFieldErrors({});
+    setShowModal(false);
+    router.refresh();
+  } else {
+    setError(res?.message || "Registration failed");
+    setFieldErrors({});
+  }
+
+  setRegisterLoading(false);
+};
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4">
@@ -114,31 +162,20 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
           </form>
         ) : (
           // Register Form
-          <form method="POST" action="/api/register" className="space-y-4" id="registerForm">
+          <form onSubmit={handleRegister} className="space-y-4" id="registerForm">
             <h2 className="text-xl font-semibold text-center py-2">Register</h2>
 
             <div className="flex flex-col">
-              <label htmlFor="first_name" className="mb-1 text-sm font-medium">
-                First Name
+              <label htmlFor="name" className="mb-1 text-sm font-medium">
+                Name
               </label>
               <input
                 type="text"
-                name="first_name"
-                id="first_name"
+                name="name"
+                id="name"
                 className="border border-gray-300 px-3 py-2 rounded"
-                required
-              />
-            </div>
-
-            <div className="flex flex-col">
-              <label htmlFor="last_name" className="mb-1 text-sm font-medium">
-                Last Name
-              </label>
-              <input
-                type="text"
-                name="last_name"
-                id="last_name"
-                className="border border-gray-300 px-3 py-2 rounded"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 required
               />
             </div>
@@ -151,9 +188,36 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
                 type="email"
                 name="email"
                 id="register_email"
-                className="border border-gray-300 px-3 py-2 rounded"
+                className={`border px-3 py-2 rounded ${
+                  fieldErrors.email ? "border-red-500" : "border-gray-300"
+                }`}
+                value={registerEmail}
+                onChange={(e) => setRegisterEmail(e.target.value)}
                 required
               />
+              {fieldErrors.email && (
+                <small className="text-red-500 mt-1">{fieldErrors.email[0]}</small>
+              )}  
+            </div>
+
+            <div className="flex flex-col">
+              <label htmlFor="phone" className="mb-1 text-sm font-medium">
+                Phone
+              </label>
+              <input
+                type="text"
+                name="phone"
+                id="phone"
+                className={`border px-3 py-2 rounded ${
+                  fieldErrors.phone ? "border-red-500" : "border-gray-300"
+                }`}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+              />
+              {fieldErrors.phone && (
+                <small className="text-red-500 mt-1">{fieldErrors.phone[0]}</small>
+              )}
             </div>
 
             <div className="flex flex-col">
@@ -164,9 +228,16 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
                 type="password"
                 name="password"
                 id="register_password"
-                className="border border-gray-300 px-3 py-2 rounded"
+                className={`border px-3 py-2 rounded ${
+                  fieldErrors.password ? "border-red-500" : "border-gray-300"
+                }`}
+                value={registerPassword}
+                onChange={(e) => setRegisterPassword(e.target.value)}
                 required
               />
+              {fieldErrors.password && (
+                <small className="text-red-500 mt-1">{fieldErrors.password[0]}</small>
+              )}
             </div>
 
             <div className="flex flex-col">
@@ -178,6 +249,8 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
                 name="confirm_password"
                 id="confirm_password"
                 className="border border-gray-300 px-3 py-2 rounded"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
             </div>
@@ -185,9 +258,10 @@ export default function AuthModal({ isAuthenticated }: LoginModalProps) {
             <div className="flex items-center justify-between">
               <button
                 type="submit"
-                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition"
+                disabled={registerLoading}
+                className="bg-green-600 cursor-pointer text-white px-6 py-2 rounded-lg hover:bg-green-700 transition disabled:opacity-50"
               >
-                Register
+                {registerLoading ? "Registering..." : "Register"}
               </button>
 
               <p className="text-sm text-center">

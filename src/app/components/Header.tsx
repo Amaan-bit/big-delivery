@@ -46,6 +46,7 @@ const Header = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("userDetails");
     window.location.href = "/";
   };
 

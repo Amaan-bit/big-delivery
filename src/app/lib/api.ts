@@ -77,6 +77,28 @@ export async function loginUser(payload: LoginPayload): Promise<LoginResponse | 
     return data;
 }
 
+// Registerd
+export async function registerUser(data: {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  password_confirmation: string;
+}) {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return await res.json();
+
+  } catch (error) {
+    console.error("Register API error:", error);
+    return null;
+  }
+}
+
 // Home page
 
 export async function fetchHomePageData() {
@@ -188,6 +210,7 @@ export async function fetchWishlist(token: string) {
       Authorization: `Bearer ${token}`,
     },
   });
+  console.log(res,token);
   if (!res.ok) {
     throw new Error('Failed to fetch wishlist');
   }
@@ -301,3 +324,27 @@ export async function changePassword(old_password: string, password: string, pas
 
   return response.json();
 }
+
+// Fetch Address
+export async function fetchAddresses() {
+  const token = localStorage.getItem('token');
+  if (!token) throw new Error('No auth token found');
+
+  const res = await fetch(`${BASE_URL}/addresses`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to fetch addresses');
+  }
+
+  const json = await res.json();
+  if (json.status !== 'success') {
+    throw new Error('API returned failure');
+  }
+  return json.data; // array of address objects
+}
+
