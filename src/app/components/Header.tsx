@@ -1,6 +1,7 @@
 'use client';
 import Image from 'next/image';
 import { useState, useRef, useEffect } from 'react';
+import { useAppSelector } from '@/store/hooks'; // ✅ get data from redux
 import CartModal from '@/app/components/CartModal';
 import Link from 'next/link';
 
@@ -8,28 +9,8 @@ const Header = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-
-  const cartItems = [
-    {
-      id: '1',
-      name: 'Priyems Idli Dosa Batter',
-      weight: '2.97 Lbs',
-      price: 8.23,
-      quantity: 1,
-      image: 'https://big-app.s3.amazonaws.com/products/2024-08-18/1724005176_Food-Grains.webp',
-    },
-    {
-      id: '2',
-      name: 'Tea Coffee',
-      weight: '3.96 Lbs',
-      price: 10.29,
-      quantity: 1,
-      image: 'https://big-app.s3.amazonaws.com/products/2024-08-18/1724004219_Tea-Coffe.webp',
-    },
-  ];
-
+  const { items: cartItems, payable_amount } = useAppSelector((state) => state.cart);
   const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  const totalPrice = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -52,7 +33,7 @@ const Header = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-white shadow-sm">
+      <header className="fixed top-0 left-0 w-full z-50 bg-white shadow-sm">
         <div className="max-w-9xl mx-auto px-4 py-2 flex justify-between items-center">
           {/* Logo */}
           <div className="text-xl font-bold text-green-600">
@@ -129,7 +110,7 @@ const Header = () => {
               className="bg-green-500 text-white px-4 py-1 rounded"
               onClick={() => setIsCartOpen(true)}
             >
-              {totalItems} Item{totalItems !== 1 && 's'} <span>${totalPrice.toFixed(2)}</span>
+              {totalItems} Item{totalItems !== 1 && 's'} <span>${payable_amount?.toFixed(2) || '0.00'}</span>
             </button>
           </div>
         </div>
@@ -139,7 +120,6 @@ const Header = () => {
       <CartModal
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
-        cartItems={cartItems}
       />
     </>
   );

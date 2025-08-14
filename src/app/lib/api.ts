@@ -348,3 +348,85 @@ export async function fetchAddresses() {
   return json.data; // array of address objects
 }
 
+export interface Product {
+  id: number;
+  name: string;
+  brand_name: string;
+  thumbnail: string;
+  price: number;
+  stock_quantity: number;
+}
+
+export interface OrderItem {
+  id: number;
+  product: Product;
+  quantity: number;
+  sale_price: number;
+  price: number;
+  tax: number;
+  discount: number;
+}
+
+export interface Address {
+  label: string;
+  name: string;
+  street: string;
+  landmark: string | null;
+  area: string;
+  city: string;
+  state: string;
+  country: string;
+  postal_code: string;
+  phone: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface Order {
+  id: number;
+  sub_total: number;
+  net_amount: number;
+  payable_amount: number;
+  discount: number;
+  tax: number;
+  wallet_use: number;
+  online_amount: number;
+  handling_charges: number;
+  service_charges: number;
+  delivery_charges: number;
+  payment_method: string;
+  payment_status: string;
+  status: string;
+  track_link: string;
+  delivery_date: string;
+  delivery_time: string;
+  delivery_type: string;
+  delivery_in: string | null;
+  address: Address;
+  created_at: string;
+  updated_at: string;
+  items: OrderItem[];
+}
+
+export async function fetchOrderById(orderId: number): Promise<Order> {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    throw new Error("Authentication token not found");
+  }
+
+  const res = await fetch(`${BASE_URL}/orders/${orderId}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch order: ${res.statusText}`);
+  }
+
+  const data = await res.json();
+  return data.data as Order;
+}
+

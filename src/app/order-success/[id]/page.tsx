@@ -1,8 +1,33 @@
+"use client";
+
 import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { fetchOrderById, Order } from "@/app/lib/api";
+import LoadingSpinner from "@/app/components/LoadingSpinner";
+
 
 export default function OrderSuccess() {
+  const { id } = useParams();
+    const [order, setOrder] = useState<Order | null>(null);
+  
+    useEffect(() => {
+      (async () => {
+        try {
+          const data = await fetchOrderById(Number(id)); // Pass dynamic ID if needed
+          setOrder(data);
+        } catch (err) {
+          console.error(err);
+        }
+      })();
+    }, [id]);
+  
+    if (!order) {
+      return <LoadingSpinner></LoadingSpinner>;
+    }
+
   return (
     <div className="min-h-screen bg-white overflow-x-hidden flex flex-col">
       <Header />
@@ -18,34 +43,36 @@ export default function OrderSuccess() {
 
           <div className="px-2">
             <div className="flex justify-between gap-3 mb-4">
-              <h5 className="uppercase text-gray-700 font-semibold text-lg">Hi! Amaan</h5>
+              <h5 className="uppercase text-gray-700 font-semibold text-lg">
+                Hi! {order.address?.name}
+              </h5>
               <h6 className="text-gray-800 text-lg">
-                Order ID: <b>ORD_39_1754550221</b>
-                </h6>
+                Order ID: <b>{order.id}</b>
+              </h6>
             </div>
-            <h4 className="mt-5 mb-5 text-2xl font-bold text-green-600">Thanks for your order</h4>
-            
+            <h4 className="mt-5 mb-5 text-2xl font-bold text-green-600">
+              Thanks for your order
+            </h4>
 
-            <span className="text-green-600 font-semibold block mt-6 mb-3">Payment Summary</span>
+            <span className="text-green-600 font-semibold block mt-6 mb-3">
+              Payment Summary
+            </span>
 
             <hr className="border-gray-300 mb-5" />
 
             <table className="w-full text-sm">
               <tbody>
-                <tr>
-                  <td className="text-left py-1">Priyems Idli Dosa Batter</td>
-                  <td className="text-left py-1">2.97 Lbs</td>
-                  <td className="text-right py-1">$8.23</td>
-                </tr>
-                <tr>
-                  <td className="text-left py-1">Priyems Dosa Batter</td>
-                  <td className="text-left py-1">3.96 Lbs</td>
-                  <td className="text-right py-1">$10.29</td>
-                </tr>
+                {order.items.map((item) => (
+                  <tr key={item.id}>
+                    <td className="text-left py-1">{item.product.name}</td>
+                    <td className="text-left py-1">{item.quantity}</td>
+                    <td className="text-right py-1">${item.sale_price}</td>
+                  </tr>
+                ))}
                 <tr className="font-semibold border-t border-gray-300">
                   <td className="text-left py-2">Total</td>
                   <td></td>
-                  <td className="text-right py-2">$18.52</td>
+                  <td className="text-right py-2">${order.sub_total}</td>
                 </tr>
               </tbody>
             </table>
@@ -53,31 +80,31 @@ export default function OrderSuccess() {
             <div className="space-y-2 mt-6 text-gray-700 text-sm font-medium">
               <div className="flex justify-between">
                 <span>Delivery Charges</span>
-                <span>$5.99</span>
+                <span>${order.delivery_charges}</span>
               </div>
               <div className="flex justify-between">
                 <span>Service Charges</span>
-                <span>$1.00</span>
+                <span>${order.service_charges}</span>
               </div>
               <div className="flex justify-between">
                 <span>Handling Charges</span>
-                <span>$1.00</span>
+                <span>${order.handling_charges}</span>
               </div>
               <div className="flex justify-between">
                 <span>Tax</span>
-                <span>$0.00</span>
+                <span>${order.tax}</span>
               </div>
               <div className="flex justify-between font-bold text-lg mt-4 border-t border-gray-300 pt-3 text-green-600">
                 <span>Total</span>
-                <span>$26.51</span>
+                <span>${order.payable_amount}</span>
               </div>
             </div>
 
             <hr className="my-6 border-gray-300" />
 
             <div className="flex justify-between text-gray-700 text-sm">
-              <span>Pay By Wallet</span>
-              <span>$26.51</span>
+              <span>Pay By {order.payment_method}</span>
+              <span>${order.wallet_use}</span>
             </div>
           </div>
 

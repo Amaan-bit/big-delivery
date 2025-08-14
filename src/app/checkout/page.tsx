@@ -1,19 +1,130 @@
 "use client";
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import Header from "@/app/components/Header";
 import Footer from "@/app/components/Footer";
 import Image from "next/image";
+import { RootState, AppDispatch } from "@/store/store";
+import { getCart } from "@/store/cartSlice";
+import { fetchAddresses } from '@/app/lib/api';
+import LoadingSpinner from "@/app/components/LoadingSpinner";
 
 export default function Checkout() {
+  const dispatch = useDispatch<AppDispatch>();
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token");
+      if (token) {
+        dispatch(getCart(token));
+      }
+    }
+  }, [dispatch]);
+
+  // Read cart data from Redux
+  const {
+    items,
+    sub_total,
+    discount,
+    tax,
+    payable_amount
+  } = useSelector((state: RootState) => state.cart);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [addressOpen, setAddressOpen] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [user, setUser] = useState({
+      id: 100123,
+      name: 'John Doe',
+      email: 'john@example.com',
+      addresses: [] as Address[],
+    });
+  interface ApiAddress {
+    id: number;
+    user_id: number;
+    label: string;
+    name: string;
+    street: string;
+    landmark: string | null;
+    area: string;
+    city: string;
+    state: string;
+    country: string;
+    postal_code: string;
+    phone: string;
+    latitude: string | null;
+    longitude: string | null;
+    is_default: number;
+    created_at: string;
+    updated_at: string;
+  }
+
+  interface Address {
+    id: number;
+    name: string;
+    street: string;
+    area: string;
+    city: string;
+    state: string;
+    country: string;
+    postal_code: string;
+    phone: string;
+    address: string;
+    checked: boolean;
+  }
+
+  useEffect(() => {
+      async function loadAddresses() {
+        setLoading(true);
+        setError(null);
+        try {
+          const addressesFromApi = await fetchAddresses();
+  
+          // Map API response to your Address type and format address string
+          const addresses: Address[] = addressesFromApi.map((addr: ApiAddress) => ({
+            id: addr.id,
+            name: addr.name,
+            street: addr.street || '',
+            area: addr.area || '',
+            city: addr.city || '',
+            state: addr.state || '',
+            country: addr.country || '',
+            postal_code: addr.postal_code || '',
+            phone: addr.phone || '',
+            address: `${addr.street}, ${addr.area}, ${addr.city}, ${addr.state}, ${addr.country}, ${addr.postal_code}`,
+            checked: addr.is_default === 1, // mark checked if is_default=1
+          }));
+  
+          // If none is default, mark first one as checked
+          const anyChecked = addresses.some((a) => a.checked);
+          if (!anyChecked && addresses.length > 0) {
+            addresses[0].checked = true;
+          }
+  
+          setUser((prev) => ({
+            ...prev,
+            addresses,
+          }));
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setLoading(false);
+        }
+      }
+  
+      loadAddresses();
+    }, []);
+
+    if (loading) return <LoadingSpinner />;
+    if (error) return <div className="text-red-500">Error: {error}</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden flex flex-col">
       <Header />
 
       <main className="max-w-7xl mx-auto p-6 flex-grow grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Left Column */}
+        {/* Left Column - Address + Payment */}
         <section className="lg:col-span-7 bg-white shadow-lg rounded-lg p-8">
           {/* Choose Address Accordion */}
           <div className="border-b border-gray-200 pb-6 mb-6">
@@ -30,49 +141,49 @@ export default function Checkout() {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
+
             <div
               className={`overflow-hidden transition-[max-height] duration-300 ${
                 addressOpen ? "max-h-[1000px]" : "max-h-0"
               }`}
             >
               <div className="space-y-6">
-                <button className="inline-flex items-center gap-2 text-blue-600 font-semibold text-sm hover:text-blue-700 transition">
-                  <i className="fa fa-plus" />
-                  Add New Address
-                </button>
 
-                {/* Address Options */}
-                {[
-                  {
-                    name: "Amaan Ansari",
-                    address: "2 floor, Street Road, USA, FL, us, 32003",
-                    checked: true,
-                  },
-                  {
-                    name: "Amaan Ansari",
-                    address: "99 florance st, Malden, MA, us, 02148",
-                    checked: false,
-                  },
-                ].map(({ name, address, checked }, i) => (
+                {/* Example addresses */}
+                {user.addresses.map(({ id, name, address, checked }, i) => (
                   <label
-                    key={i}
-                    className={`flex items-start gap-4 p-4 border rounded-lg cursor-pointer transition 
-                      ${checked ? "border-blue-600 bg-blue-50" : "border-gray-300 hover:border-blue-400"}`}
+                    key={id}
+                    className={`relative flex items-start gap-4 p-4 border rounded-lg cursor-pointer transition ${
+                      checked ? 'border-blue-600 bg-blue-50' : 'border-gray-300 hover:border-blue-400'
+                    }`}
                   >
                     <input
                       type="radio"
                       name="address"
-                      defaultChecked={checked}
-                      className="mt-1 cursor-pointer accent-blue-600"
+                      checked={checked}
+                      onChange={() => {
+                        setUser((prev) => ({
+                          ...prev,
+                          addresses: prev.addresses.map((addr, idx) => ({
+                            ...addr,
+                            checked: idx === i,
+                          })),
+                        }));
+                      }}
+                      className="mt-1 accent-blue-600"
                     />
-                    <div>
-                      <p className="font-semibold text-gray-900">{name}</p>
-                      <p className="text-gray-700 text-sm leading-snug">{address}</p>
+                    <div className="flex-1">
+                      <p className="font-semibold">{name}</p>
+                      <p className="text-sm text-gray-700">{address}</p>
                     </div>
                   </label>
                 ))}
@@ -95,17 +206,23 @@ export default function Checkout() {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
+
             <div
               className={`overflow-hidden transition-[max-height] duration-300 ${
                 paymentOpen ? "max-h-[2000px]" : "max-h-0"
               }`}
             >
               <div className="space-y-6">
+                {/* Payment options */}
                 <div className="flex flex-wrap gap-5">
                   {[
                     { label: "Wallet $183.61", tooltip: false },
@@ -134,7 +251,9 @@ export default function Checkout() {
                 {/* Card Form */}
                 <form className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Card Holder Name</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Card Holder Name
+                    </label>
                     <input
                       type="text"
                       className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -142,7 +261,9 @@ export default function Checkout() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Card Number</label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Card Number
+                    </label>
                     <input
                       type="password"
                       className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -151,12 +272,14 @@ export default function Checkout() {
                       inputMode="numeric"
                     />
                   </div>
+
+                  {/* Expiry and CVV */}
                   <div className="flex gap-5">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">Expiry Month</label>
-                      <select
-                        className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                      >
+                      <label className="block text-sm font-medium text-gray-700">
+                        Expiry Month
+                      </label>
+                      <select className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
                         {[
                           "January",
                           "February",
@@ -171,17 +294,20 @@ export default function Checkout() {
                           "November",
                           "December",
                         ].map((month, idx) => (
-                          <option key={idx} value={String(idx + 1).padStart(2, "0")}>
+                          <option
+                            key={idx}
+                            value={String(idx + 1).padStart(2, "0")}
+                          >
                             {month}
                           </option>
                         ))}
                       </select>
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">Expiry Year</label>
-                      <select
-                        className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                      >
+                      <label className="block text-sm font-medium text-gray-700">
+                        Expiry Year
+                      </label>
+                      <select className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
                         {[2025, 2026, 2027, 2028].map((year) => (
                           <option key={year} value={year}>
                             {year}
@@ -190,7 +316,9 @@ export default function Checkout() {
                       </select>
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">CVV</label>
+                      <label className="block text-sm font-medium text-gray-700">
+                        CVV
+                      </label>
                       <input
                         type="password"
                         className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
@@ -200,11 +328,12 @@ export default function Checkout() {
                       />
                     </div>
                   </div>
+
                   <button
                     type="submit"
                     className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition"
                   >
-                    Pay $26.51
+                    Pay ${payable_amount?.toFixed(2) || "0.00"}
                   </button>
                 </form>
               </div>
@@ -212,49 +341,35 @@ export default function Checkout() {
           </div>
         </section>
 
-        {/* Right Column */}
+        {/* Right Column - Bill Details */}
         <aside className="lg:col-span-5 bg-white shadow-lg rounded-lg p-8">
-          <h2 className="text-2xl font-semibold mb-6 text-gray-900">Bill Details</h2>
+          <h2 className="text-2xl font-semibold mb-6 text-gray-900">
+            Bill Details
+          </h2>
 
-          <div className="mb-6">
-            <p className="text-sm text-gray-600">
-              Delivery Address:{" "}
-              <span className="text-blue-600 cursor-pointer hover:underline">
-                Change Address
-              </span>
-            </p>
-            <p className="text-gray-800 font-medium mt-1 leading-snug">
-              99 florance st, Malden, MA, us, 02148
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            {[{
-              name: "Priyems Idli Dosa Batter",
-              weight: "2.97 Lbs",
-              price: 8.23,
-              image: "https://big-app.s3.amazonaws.com/products/2024-08-18/1724005176_Food-Grains.webp",
-            }, {
-              name: "Priyems Dosa Batter",
-              weight: "3.96 Lbs",
-              price: 10.29,
-              image: "https://big-app.s3.amazonaws.com/products/2024-08-18/1724004219_Tea-Coffe.webp",
-            }].map((item, idx) => (
+          <div className="space-y-4">
+            {items?.map((item, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-5 border border-gray-300 rounded-lg p-3 shadow-md transition"
+                className="flex items-center gap-6 border border-gray-300 rounded-lg p-2 shadow-md transition"
               >
                 <Image
-                  src={item.image}
-                  alt={item.name}
-                  width={60}
-                  height={60}
+                  src={item.thumbnail || "/images/default-product.jpg"}
+                  alt={item.product_name}
+                  width={45}
+                  height={45}
                   className="rounded-lg object-cover"
                 />
                 <div>
-                  <p className="text-md font-semibold text-gray-900">{item.name}</p>
-                  <p className="text-sm text-gray-600">{item.weight}</p>
-                  <p className="text-md font-semibold text-gray-800">${item.price.toFixed(2)}</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {item.product_name}
+                  </p>
+                  {item.variant_name && (
+                    <p className="text-xs text-gray-600">{item.variant_name} x {item.quantity}</p>
+                  )}
+                  <p className="text-sm font-semibold text-gray-800">
+                    ${(item.price ?? 0).toFixed(2)}
+                  </p>
                 </div>
               </div>
             ))}
@@ -264,24 +379,32 @@ export default function Checkout() {
 
           <div className="text-gray-700 space-y-3 text-sm">
             <div className="flex justify-between">
+              <span>Sub Total</span>
+              <span>${sub_total?.toFixed(2) || "0.00"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Discount</span>
+              <span>- ${discount?.toFixed(2) || "0.00"}</span>
+            </div>
+            <div className="flex justify-between">
               <span>Delivery Charges</span>
-              <span>$5.99</span>
+              <span>$ 0.00</span>
             </div>
             <div className="flex justify-between">
               <span>Service Charges</span>
-              <span>$1.00</span>
+              <span>$ 0.00</span>
             </div>
             <div className="flex justify-between">
               <span>Handling Charges</span>
-              <span>$1.00</span>
+              <span>$ 0.00</span>
             </div>
             <div className="flex justify-between">
               <span>Tax</span>
-              <span>$0.00</span>
+              <span>${tax?.toFixed(2) || "0.00"}</span>
             </div>
             <div className="flex justify-between font-semibold text-lg mt-4 border-t pt-3">
               <span>Total</span>
-              <span>$26.51</span>
+              <span>${payable_amount?.toFixed(2) || "0.00"}</span>
             </div>
           </div>
         </aside>

@@ -5,6 +5,9 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { addToWishlist } from "@/app/lib/api";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { addToCart, incrementCart, decrementCart } from "@/store/cartSlice";
+import { Minus, Plus } from "lucide-react";
 
 interface Variant {
   id: number;
@@ -26,7 +29,14 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
   const initialVariant = variants.find((v) => v.is_active) || variants[0] || null;
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(initialVariant);
   const [isInWishlist, setIsInWishlist] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+
+  const dispatch = useAppDispatch();
+  const { items, loading } = useAppSelector((state) => state.cart);
+
+  const cartItem = items.find(
+    (item) => item.product_id === id && item.variant_id === selectedVariant?.id
+  );
 
   const handleVariantChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const variantId = Number(e.target.value);
@@ -37,21 +47,54 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
   const handleWishlistClick = async () => {
     if (!selectedVariant) return;
     try {
-      setLoading(true);
+      setWishlistLoading(true);
       await addToWishlist(id, selectedVariant.id);
-      setIsInWishlist(true); // change icon
+      setIsInWishlist(true);
     } catch (error) {
       console.error(error);
       alert("Failed to add to wishlist");
     } finally {
-      setLoading(false);
+      setWishlistLoading(false);
     }
   };
+
+  const handleAddToCart = () => {
+    if (!selectedVariant) return;
+    dispatch(
+      addToCart({
+        product_id: id,
+        variant_id: selectedVariant.id,
+        token: localStorage.getItem("token") || null,
+      })
+    );
+  };
+
+  const handleQuantityChange = (type: "plus" | "minus") => {
+    if (!selectedVariant || !cartItem) return;
+    if (type === "plus") {
+      dispatch(
+        incrementCart({
+          product_id: id,
+          variant_id: selectedVariant.id,
+          token: localStorage.getItem("token") || null,
+        })
+      );
+    } else if (type === "minus") {
+      dispatch(
+        decrementCart({
+          product_id: id,
+          variant_id: selectedVariant.id,
+          token: localStorage.getItem("token") || null,
+        })
+      );
+    }
+  };
+
   const outOfStock = !selectedVariant;
 
   return (
     <div className="w-55 rounded bg-white shadow-sm relative p-2">
-      {/* Top-left icon */}
+      {/* Wishlist */}
       <div
         className="absolute top-1 left-1 flex items-center gap-0.5 text-gray-600 text-xs z-10"
         onClick={handleWishlistClick}
@@ -60,19 +103,19 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
           <Check className="w-5 h-5 text-green-500 cursor-pointer" />
         ) : (
           <Heart
-            className={`w-5 h-5 cursor-pointer ${loading ? "opacity-50" : ""}`}
+            className={`w-5 h-5 cursor-pointer ${wishlistLoading ? "opacity-50" : ""}`}
           />
         )}
       </div>
 
-      {/* Top-right discount */}
+      {/* Discount */}
       {selectedVariant && selectedVariant.discount_percentage > 0 && (
         <div className="absolute top-0 right-0 bg-orange-400 text-white text-[10px] px-1 py-0.5 rounded-bl z-10">
           {selectedVariant.discount_percentage}% Off
         </div>
       )}
 
-      {/* Product Image */}
+      {/* Image */}
       <div className="h-40 w-full flex items-center justify-center my-2">
         {image ? (
           <Link href={`/product-details/${id}`}>
@@ -92,16 +135,17 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
         )}
       </div>
 
-      {/* Product Info */}
+      {/* Info */}
       <div className="text-xs text-center">
-        <p className="font-semibold text-gray-800 leading-snug line-clamp-2 h-8 mt-10">{name}</p>
+        <p className="font-semibold text-gray-800 leading-snug line-clamp-2 h-8 mt-10">
+          {name}
+        </p>
 
         {variants.length > 0 ? (
           <select
             className="border border-gray-300 rounded mt-1 text-xs w-full px-1 py-0.5"
             onChange={handleVariantChange}
             value={selectedVariant?.id || ""}
-            disabled={variants.length === 0}
           >
             {variants.map((variant) => (
               <option key={variant.id} value={variant.id}>
@@ -127,7 +171,7 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
           </div>
         )}
 
-        {/* Add Button */}
+        {/* Add / Quantity UI */}
         <div className="my-3">
           {outOfStock ? (
             <button
@@ -136,8 +180,32 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
             >
               ADD
             </button>
+          ) : cartItem && cartItem.quantity > 0 ? (
+            <div className="flex items-center justify-between bg-green-600 text-white rounded">
+              <button
+                className="px-2 py-2 cursor-pointer"
+                onClick={() => handleQuantityChange("minus")}
+                disabled={loading}
+              >
+                <Minus size={20}/>
+              </button>
+              <span className="text-lg">{cartItem.quantity}</span>
+              <button
+                className="px-2 py-2 cursor-pointer"
+                onClick={() => handleQuantityChange("plus")}
+                disabled={loading}
+              >
+                <Plus size={20} />
+              </button>
+            </div>
           ) : (
-            <button className="bg-green-600 text-white text-xs py-2 w-full rounded font-bold">ADD</button>
+            <button
+              className="bg-green-600 text-white text-xs py-2 w-full rounded font-bold disabled:opacity-50"
+              onClick={handleAddToCart}
+              disabled={loading}
+            >
+              {loading ? "ADDING..." : "ADD"}
+            </button>
           )}
         </div>
 
@@ -146,7 +214,6 @@ const ProductCard = ({ id, name, image, variants = [] }: ProductCardProps) => {
           <div className="absolute inset-0 bg-opacity-10 bg-[#ffffff6b] flex items-center justify-center text-red-600 font-bold text-sm rounded">
             Out of stock
           </div>
-
         )}
       </div>
     </div>
