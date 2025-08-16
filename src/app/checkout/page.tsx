@@ -7,11 +7,13 @@ import Footer from "@/app/components/Footer";
 import Image from "next/image";
 import { RootState, AppDispatch } from "@/store/store";
 import { getCart } from "@/store/cartSlice";
-import { fetchAddresses } from '@/app/lib/api';
+import { fetchAddresses } from "@/app/lib/api";
+import { BASE_URL } from '@/app/lib/config';
 import LoadingSpinner from "@/app/components/LoadingSpinner";
 
 export default function Checkout() {
   const dispatch = useDispatch<AppDispatch>();
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const token = localStorage.getItem("token");
@@ -21,25 +23,85 @@ export default function Checkout() {
     }
   }, [dispatch]);
 
-  // Read cart data from Redux
-  const {
-    items,
-    sub_total,
-    discount,
-    tax,
-    payable_amount
-  } = useSelector((state: RootState) => state.cart);
+  // States
+  const [selectedDate, setSelectedDate] = useState<{ raw: Date; formatted: string; label: string } | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [useWallet, setUseWallet] = useState(false);
+  const [cardDetails, setCardDetails] = useState({
+    holder: "",
+    number: "",
+    month: "",
+    year: "",
+    cvv: "",
+  });
 
+  // Generate next 10 days
+  const today = new Date();
+  const dates = Array.from({ length: 10 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    return {
+      raw: d,
+      label: d.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+      }),
+    };
+  });
+
+  // Slots
+  const slots = [
+    { label: "Morning (8AM - 11AM)", value: "morning", endHour: 11 },
+    { label: "Afternoon (12PM - 3PM)", value: "afternoon", endHour: 15 },
+    { label: "Evening (4PM - 7PM)", value: "evening", endHour: 19 },
+    { label: "Night (8PM - 10PM)", value: "night", endHour: 22 },
+  ];
+  const now = new Date();
+  const isSlotAvailable = (date: Date, endHour: number) => {
+    const isToday = date.toDateString() === today.toDateString();
+    if (!isToday) return true;
+    return now.getHours() < endHour;
+  };
+
+  const handleDateSelect = (dateObj: { raw: Date; label: string }) => {
+    const formatted = dateObj.raw.toISOString().split("T")[0];
+    setSelectedDate({
+      raw: dateObj.raw,
+      formatted,
+      label: dateObj.label,
+    });
+    const firstAvailable = slots.find((slot) => isSlotAvailable(dateObj.raw, slot.endHour));
+    setSelectedSlot(firstAvailable ? firstAvailable.value : null);
+  };
+
+  const [customer, setCustomer] = useState<{ name: string; email: string; wallet: number } | null>(null);
+  useEffect(() => {
+    const storedUser = localStorage.getItem("userDetails");
+    if (storedUser) {
+      try {
+        setCustomer(JSON.parse(storedUser));
+      } catch (err) {
+        console.error("Failed to parse user details:", err);
+      }
+    }
+  }, []);
+
+  // Redux Cart
+  const { items, sub_total, discount, tax, payable_amount } = useSelector((state: RootState) => state.cart);
+
+  // Address state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addressOpen, setAddressOpen] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [user, setUser] = useState({
-      id: 100123,
-      name: 'John Doe',
-      email: 'john@example.com',
-      addresses: [] as Address[],
-    });
+    id: 100123,
+    name: "John Doe",
+    email: "john@example.com",
+    addresses: [] as Address[],
+  });
+
   interface ApiAddress {
     id: number;
     user_id: number;
@@ -74,57 +136,144 @@ export default function Checkout() {
     checked: boolean;
   }
 
-  useEffect(() => {
-      async function loadAddresses() {
-        setLoading(true);
-        setError(null);
-        try {
-          const addressesFromApi = await fetchAddresses();
-  
-          // Map API response to your Address type and format address string
-          const addresses: Address[] = addressesFromApi.map((addr: ApiAddress) => ({
-            id: addr.id,
-            name: addr.name,
-            street: addr.street || '',
-            area: addr.area || '',
-            city: addr.city || '',
-            state: addr.state || '',
-            country: addr.country || '',
-            postal_code: addr.postal_code || '',
-            phone: addr.phone || '',
-            address: `${addr.street}, ${addr.area}, ${addr.city}, ${addr.state}, ${addr.country}, ${addr.postal_code}`,
-            checked: addr.is_default === 1, // mark checked if is_default=1
-          }));
-  
-          // If none is default, mark first one as checked
-          const anyChecked = addresses.some((a) => a.checked);
-          if (!anyChecked && addresses.length > 0) {
-            addresses[0].checked = true;
-          }
-  
-          setUser((prev) => ({
-            ...prev,
-            addresses,
-          }));
-        } catch (err) {
-          setError((err as Error).message);
-        } finally {
-          setLoading(false);
-        }
-      }
-  
-      loadAddresses();
-    }, []);
+  interface CheckoutPayload {
+    wallet_use: boolean;
+    coupon_id?: number;
+    tip?: number;
+    address_id: number;
+    delivery_date: string; // yyyy-mm-dd
+    deliverable: boolean;
+    card_number?: string;
+    card_holder_name?: string;
+    expire_month?: number;
+    expire_year?: number;
+    cvv?: number;
+    delivery_instraction?: string;
+    delivery_Note?: string;
+    delivery_time: string;
+    delivery_type: "express" | "standard";
+    delivery_in: string; // e.g. "1HR"
+  }
 
-    if (loading) return <LoadingSpinner />;
-    if (error) return <div className="text-red-500">Error: {error}</div>;
+  useEffect(() => {
+    async function loadAddresses() {
+      setLoading(true);
+      setError(null);
+      try {
+        const addressesFromApi = await fetchAddresses();
+        const addresses: Address[] = addressesFromApi.map((addr: ApiAddress) => ({
+          id: addr.id,
+          name: addr.name,
+          street: addr.street || "",
+          area: addr.area || "",
+          city: addr.city || "",
+          state: addr.state || "",
+          country: addr.country || "",
+          postal_code: addr.postal_code || "",
+          phone: addr.phone || "",
+          address: `${addr.street}, ${addr.area}, ${addr.city}, ${addr.state}, ${addr.country}, ${addr.postal_code}`,
+          checked: addr.is_default === 1,
+        }));
+
+        if (!addresses.some((a) => a.checked) && addresses.length > 0) {
+          addresses[0].checked = true;
+        }
+
+        setUser((prev) => ({
+          ...prev,
+          addresses,
+        }));
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadAddresses();
+  }, []);
+
+  // 🚀 Handle Pay
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const handlePay = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCheckoutError(null);
+
+    // Validation
+    const selectedAddress = user.addresses.find((a) => a.checked);
+    if (!selectedAddress) return setCheckoutError("Please select a delivery address");
+    if (!selectedDate) return setCheckoutError("Please select a delivery date");
+    if (!selectedSlot) return setCheckoutError("Please select a delivery slot");
+
+    // Wallet logic
+    const walletCoversAll = useWallet && customer && customer.wallet >= (payable_amount ?? 0);
+
+    if (!walletCoversAll) {
+      if (!cardDetails.number || !cardDetails.holder || !cardDetails.month || !cardDetails.year || !cardDetails.cvv) {
+        return setCheckoutError("Please enter valid card details");
+      }
+    }
+
+    try {
+      setCheckoutLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Not authenticated");
+
+      const payload: CheckoutPayload = {
+        wallet_use: useWallet,
+        address_id: selectedAddress.id,
+        delivery_date: selectedDate.formatted,
+        deliverable: true,
+        delivery_time: selectedSlot,
+        delivery_type: "standard",
+        delivery_in: "1HR",
+      };
+
+      if (!walletCoversAll) {
+        payload.card_number = cardDetails.number;
+        payload.card_holder_name = cardDetails.holder;
+        payload.expire_month = Number(cardDetails.month);
+        payload.expire_year = Number(cardDetails.year);
+        payload.cvv = Number(cardDetails.cvv);
+      }
+
+      const res = await fetch(`${BASE_URL}/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new Error("Checkout failed");
+      }
+
+      const data: { message: string; order: { id: number } } = await res.json();
+      window.location.href = `/order-success/${data.order.id}`;
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setCheckoutError(err.message);
+        console.log(err);
+      } else {
+        setCheckoutError("Something went wrong during checkout.");
+      }
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <div className="text-red-500">Error: {error}</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 overflow-x-hidden flex flex-col">
       <Header />
 
       <main className="max-w-7xl mx-auto p-6 flex-grow grid grid-cols-1 lg:grid-cols-12 gap-10">
-        {/* Left Column - Address + Payment */}
+        {/* Left Column */}
         <section className="lg:col-span-7 bg-white shadow-lg rounded-lg p-8">
           {/* Choose Address Accordion */}
           <div className="border-b border-gray-200 pb-6 mb-6">
@@ -191,17 +340,17 @@ export default function Checkout() {
             </div>
           </div>
 
-          {/* Make Payment Accordion */}
-          <div>
+          {/* Make Delivery Slot Accordion */}
+          <div className="border-b border-gray-200 pb-6 mb-6">
             <button
-              onClick={() => setPaymentOpen(!paymentOpen)}
+              onClick={() => setDeliveryOpen(!deliveryOpen)}
               className="flex justify-between items-center w-full text-left text-2xl font-semibold mb-6 text-gray-900 focus:outline-none"
-              aria-expanded={paymentOpen}
+              aria-expanded={deliveryOpen}
             >
-              Make Payment
+              Choose Delivery Time & Slot
               <svg
                 className={`w-6 h-6 transition-transform duration-300 ${
-                  paymentOpen ? "rotate-180" : ""
+                  deliveryOpen ? "rotate-180" : ""
                 }`}
                 fill="none"
                 stroke="currentColor"
@@ -218,130 +367,132 @@ export default function Checkout() {
 
             <div
               className={`overflow-hidden transition-[max-height] duration-300 ${
-                paymentOpen ? "max-h-[2000px]" : "max-h-0"
+                deliveryOpen ? "max-h-[2000px]" : "max-h-0"
               }`}
             >
               <div className="space-y-6">
-                {/* Payment options */}
-                <div className="flex flex-wrap gap-5">
-                  {[
-                    { label: "Wallet $183.61", tooltip: false },
-                    { label: "Rewards $1.52", tooltip: true },
-                  ].map(({ label, tooltip }, i) => (
-                    <label
-                      key={i}
-                      className="inline-flex items-center cursor-pointer relative"
-                    >
-                      <input type="checkbox" className="hidden peer" />
-                      <span className="px-4 py-1 border rounded-full text-sm text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white transition">
-                        {label}
-                      </span>
-                      {tooltip && (
-                        <span className="ml-2 text-xs text-gray-500 cursor-help group relative">
-                          !
-                          <span className="absolute left-1/2 -translate-x-1/2 -top-6 bg-gray-900 text-white text-xs rounded px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                            How Rewards Work?
-                          </span>
-                        </span>
-                      )}
-                    </label>
-                  ))}
+                {/* Date Selector */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3">Choose Delivery Date</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {dates.map((dateObj) => {
+                        const formatted = dateObj.raw.toISOString().split("T")[0];
+                        return (
+                          <button
+                            key={formatted}
+                            onClick={() => handleDateSelect(dateObj)}
+                            className={`px-4 py-2 rounded-lg border transition 
+                              ${selectedDate?.formatted === formatted
+                                ? "bg-orange-500 text-white border-orange-600"
+                                : "bg-white text-gray-800 border-gray-300 hover:border-gray-500"
+                              }`}
+                          >
+                            {dateObj.label}
+                          </button>
+                        );
+                      })}
+                  </div>
                 </div>
 
-                {/* Card Form */}
-                <form className="space-y-6">
+                {/* Slot Selector */}
+                {selectedDate && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Card Holder Name
-                    </label>
-                    <input
-                      type="text"
-                      className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                      placeholder="Name on Card"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Card Number
-                    </label>
-                    <input
-                      type="password"
-                      className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                      placeholder="1111 1111 1111 1111"
-                      maxLength={19}
-                      inputMode="numeric"
-                    />
-                  </div>
+                    <h3 className="text-lg font-semibold mb-3">
+                      Choose Time Slot ({selectedDate.label})
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                      {slots.map((slot) => {
+                        const available = isSlotAvailable(selectedDate.raw, slot.endHour);
 
-                  {/* Expiry and CVV */}
-                  <div className="flex gap-5">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Expiry Month
-                      </label>
-                      <select className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-                        {[
-                          "January",
-                          "February",
-                          "March",
-                          "April",
-                          "May",
-                          "June",
-                          "July",
-                          "August",
-                          "September",
-                          "October",
-                          "November",
-                          "December",
-                        ].map((month, idx) => (
-                          <option
-                            key={idx}
-                            value={String(idx + 1).padStart(2, "0")}
+                        return (
+                          <button
+                            key={slot.value}
+                            onClick={() => available && setSelectedSlot(slot.value)}
+                            disabled={!available}
+                            className={`px-4 py-2 rounded-lg border transition
+                              ${!available
+                                ? "bg-red-100 text-red-500 border-red-400 cursor-not-allowed"
+                                : selectedSlot === slot.value
+                                ? "bg-orange-500 text-white border-orange-600"
+                                : "bg-white text-gray-800 border-gray-300 hover:border-gray-500"
+                              }`}
                           >
-                            {month}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Expiry Year
-                      </label>
-                      <select className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition">
-                        {[2025, 2026, 2027, 2028].map((year) => (
-                          <option key={year} value={year}>
-                            {year}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">
-                        CVV
-                      </label>
-                      <input
-                        type="password"
-                        className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                        maxLength={3}
-                        placeholder="123"
-                        inputMode="numeric"
-                      />
+                            {slot.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
+                )}
 
-                  <button
-                    type="submit"
-                    className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition"
-                  >
-                    Pay ${payable_amount?.toFixed(2) || "0.00"}
-                  </button>
-                </form>
               </div>
+            </div>
+
+          </div>
+
+          {/* Payment Accordion */}
+          <div>
+            <button
+              onClick={() => setPaymentOpen(!paymentOpen)}
+              className="flex justify-between items-center w-full text-left text-2xl font-semibold mb-6 text-gray-900 focus:outline-none"
+            >
+              Make Payment
+              <svg className={`w-6 h-6 transition-transform duration-300 ${paymentOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            <div className={`overflow-hidden transition-[max-height] duration-300 ${paymentOpen ? "max-h-[2000px]" : "max-h-0"}`}>
+              <form className="space-y-6" onSubmit={handlePay}>
+                {/* Wallet */}
+                <div className="flex flex-wrap gap-5">
+                  <label className="inline-flex items-center cursor-pointer relative">
+                    <input type="checkbox" className="hidden peer" checked={useWallet} onChange={(e) => setUseWallet(e.target.checked)} />
+                    <span className="px-4 py-1 border rounded-full text-sm text-gray-700 peer-checked:bg-orange-500 peer-checked:text-white transition">
+                      Wallet ${customer?.wallet?.toFixed(2)}
+                    </span>
+                  </label>
+                </div>
+
+                {/* Card Form (only show if wallet not covering full amount) */}
+                {(!useWallet || (customer && customer.wallet < (payable_amount ?? 0))) && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Card Holder Name</label>
+                      <input type="text" value={cardDetails.holder} onChange={(e) => setCardDetails({ ...cardDetails, holder: e.target.value })} className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Card Number</label>
+                      <input type="text" value={cardDetails.number} onChange={(e) => setCardDetails({ ...cardDetails, number: e.target.value })} className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg" />
+                    </div>
+                    <div className="flex gap-5">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700">Expiry Month</label>
+                        <input type="number" value={cardDetails.month} onChange={(e) => setCardDetails({ ...cardDetails, month: e.target.value })} className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700">Expiry Year</label>
+                        <input type="number" value={cardDetails.year} onChange={(e) => setCardDetails({ ...cardDetails, year: e.target.value })} className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700">CVV</label>
+                        <input type="password" value={cardDetails.cvv} onChange={(e) => setCardDetails({ ...cardDetails, cvv: e.target.value })} className="mt-1 w-full border border-gray-300 px-4 py-3 rounded-lg" />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {checkoutError && <p className="text-red-500">{checkoutError}</p>}
+
+                <button type="submit" disabled={checkoutLoading} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition">
+                  {checkoutLoading ? "Processing..." : `Pay $${payable_amount?.toFixed(2) || "0.00"}`}
+                </button>
+              </form>
             </div>
           </div>
         </section>
 
-        {/* Right Column - Bill Details */}
+        {/* Right Column - Bill */}
         <aside className="lg:col-span-5 bg-white shadow-lg rounded-lg p-8">
           <h2 className="text-2xl font-semibold mb-6 text-gray-900">
             Bill Details
